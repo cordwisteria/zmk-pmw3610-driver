@@ -577,6 +577,8 @@ static enum pixart_input_mode get_input_mode_for_current_layer(const struct devi
     return MOVE;
 }
 
+static uint8_t last_orientation_layer = 0;  // 最後に適用された向きを記録
+
 static int pmw3610_report_data(const struct device *dev) {
     struct pixart_data *data = dev->data;
     uint8_t buf[PMW3610_BURST_SIZE];
@@ -589,6 +591,14 @@ static int pmw3610_report_data(const struct device *dev) {
     int32_t dividor;
     enum pixart_input_mode input_mode = get_input_mode_for_current_layer(dev);
     bool input_mode_changed = data->curr_mode != input_mode;
+
+    uint8_t current_layer = zmk_keymap_highest_layer_active();
+
+    if (input_mode == MOVE) {
+        // MOVEモードでは現在のレイヤーを記録
+        last_orientation_layer = current_layer;
+    }
+
     switch (input_mode) {
     case MOVE:
         set_cpi_if_needed(dev, CONFIG_PMW3610_CPI);
@@ -633,18 +643,26 @@ static int pmw3610_report_data(const struct device *dev) {
     int16_t x;
     int16_t y;
 
-    if (IS_ENABLED(CONFIG_PMW3610_ORIENTATION_0)) {
-        x = -raw_x;
-        y = raw_y;
-    } else if (IS_ENABLED(CONFIG_PMW3610_ORIENTATION_90)) {
+    // MOVE時は現在のレイヤー、SCROLL時はlast_orientation_layerに基づいて変換
+    uint8_t layer_to_apply = (input_mode == SCROLL) ? last_orientation_layer : current_layer;
+
+    switch (layer_to_apply) {
+    case 1: // 90° (x, y をスワップ)
         x = raw_y;
         y = -raw_x;
-    } else if (IS_ENABLED(CONFIG_PMW3610_ORIENTATION_180)) {
-        x = raw_x;
+        break;
+    case 2: // 180° (x, y を反転)
+        x = -raw_x;
         y = -raw_y;
-    } else if (IS_ENABLED(CONFIG_PMW3610_ORIENTATION_270)) {
+        break;
+    case 3: // 270° (x, y をスワップ + 反転)
         x = -raw_y;
         y = raw_x;
+        break;
+    default: // 0° (そのまま)
+        x = raw_x;
+        y = raw_y;
+        break;
     }
 
     if (IS_ENABLED(CONFIG_PMW3610_INVERT_X)) {
@@ -687,6 +705,7 @@ static int pmw3610_report_data(const struct device *dev) {
     }
 #endif
 
+
     if (x != 0 || y != 0) {
         if (input_mode != SCROLL) {
             input_report_rel(dev, INPUT_REL_X, x, false, K_FOREVER);
@@ -694,6 +713,7 @@ static int pmw3610_report_data(const struct device *dev) {
         } else {
             data->scroll_delta_x += x;
             data->scroll_delta_y += y;
+
             if (abs(data->scroll_delta_y) > CONFIG_PMW3610_SCROLL_TICK) {
                 input_report_rel(dev, INPUT_REL_WHEEL,
                                  data->scroll_delta_y > 0 ? PMW3610_SCROLL_Y_NEGATIVE : PMW3610_SCROLL_Y_POSITIVE,
@@ -705,8 +725,8 @@ static int pmw3610_report_data(const struct device *dev) {
                                  data->scroll_delta_x > 0 ? PMW3610_SCROLL_X_NEGATIVE : PMW3610_SCROLL_X_POSITIVE,
                                  true, K_FOREVER);
                 data->scroll_delta_x = 0;
-                data->scroll_delta_y = 0;
-            }
+                    data->scroll_delta_y = 0;
+                }
         }
     }
 
