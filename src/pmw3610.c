@@ -648,7 +648,7 @@ static int pmw3610_report_data(const struct device *dev) {
 
     switch (layer_to_apply) {
     case 1: // 45° (x, y を45度回転)
-        x = (raw_y - raw_x) / 1.414; // √2 ≈ 1.414
+        x = -(raw_x - raw_y) / 1.414; // √2 ≈ 1.414
         y = (raw_x + raw_y) / 1.414;
         break;
     case 2: // 90° (x, y をスワップ)
@@ -656,7 +656,7 @@ static int pmw3610_report_data(const struct device *dev) {
         y = -raw_x;
         break;
     case 3: // 135° (x, y を135度回転)
-        x = -(raw_x + raw_y) / 1.414;
+        x = (raw_x + raw_y) / 1.414;
         y = (raw_y - raw_x) / 1.414;
         break;
     case 4: // 180° (x, y を反転)
@@ -664,7 +664,7 @@ static int pmw3610_report_data(const struct device *dev) {
         y = -raw_y;
         break;
     case 5: // 225° (x, y を225度回転)
-        x = -(raw_x + raw_y) / 1.414;
+        x = (raw_x + raw_y) / 1.414;
         y = (raw_y - raw_x) / 1.414;
         break;
     case 6: // 270° (x, y をスワップ + 反転)
